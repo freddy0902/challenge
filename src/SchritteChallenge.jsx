@@ -14,9 +14,7 @@ import React, { useState, useMemo, useEffect } from "react";
      demo  – kein Worker erreichbar (lokales Entwickeln)
 ------------------------------------------------------------------- */
 
-const TAGESCAP = 30000;
 const SCHRITTE_PRO_KM = 1380;
-const PUNKTE = [3, 2, 1];
 
 const DEMO_FREUNDE = [
   { id: "fre", name: "Freddy", kurz: "FR", quelle: "iPhone", farbe: "#FFC14D", basis: 9800, streu: 3200 },
@@ -92,7 +90,7 @@ function demoDatenErzeugen() {
       if (rnd() > 0.94) s *= 1.6; // Wandertag
       if (rnd() > 0.97) s *= 0.35; // Krankheit / Schreibtischtag
       if (idx === tage.length - 1) s *= 0.62; // heute noch nicht vorbei
-      s = Math.max(400, Math.min(TAGESCAP, Math.round(s / 10) * 10));
+      s = Math.max(400, Math.round(s / 10) * 10);
       eintraege[k][f.id] = { schritte: s, km: zuKm(s), quelle: f.quelle };
     });
   });
@@ -150,13 +148,11 @@ async function echteDatenLaden() {
 
 /* ---------- Auswertung ---------- */
 
-function tagesPunkte(tagesEintrag) {
+function tagessieger(tagesEintrag) {
   const sortiert = Object.entries(tagesEintrag)
     .filter(([, e]) => e.schritte > 0)
     .sort((a, b) => b[1].schritte - a[1].schritte);
-  const punkte = {};
-  sortiert.forEach(([id], i) => (punkte[id] = PUNKTE[i] ?? 0));
-  return { punkte, sieger: sortiert[0]?.[0] };
+  return sortiert[0]?.[0];
 }
 
 function zeitraumFilter(tage, zeitraum) {
@@ -175,30 +171,24 @@ function zeitraumFilter(tage, zeitraum) {
 function auswerten(tage, eintraege, zeitraum, freunde) {
   const relevant = zeitraumFilter(tage, zeitraum);
   const summe = {};
-  freunde.forEach((f) => (summe[f.id] = { schritte: 0, km: 0, punkte: 0, siege: 0, verlauf: [] }));
+  freunde.forEach((f) => (summe[f.id] = { schritte: 0, km: 0, siege: 0, verlauf: [] }));
   relevant.forEach((d) => {
     const tag = eintraege[schluessel(d)];
     if (!tag) return;
-    const { punkte, sieger } = tagesPunkte(tag);
+    const sieger = tagessieger(tag);
     freunde.forEach((f) => {
       const e = tag[f.id] ?? { schritte: 0, km: 0 };
       summe[f.id].schritte += e.schritte;
       summe[f.id].km += e.km;
-      summe[f.id].punkte += punkte[f.id] ?? 0;
       summe[f.id].verlauf.push(e.schritte);
       if (sieger === f.id) summe[f.id].siege += 1;
     });
   });
-  const zeilen = freunde.map((f) => ({
-    ...f,
-    ...summe[f.id],
-    km: Math.round(summe[f.id].km * 10) / 10,
-  }));
-  const nachSchritten = [...zeilen].sort((a, b) => b.schritte - a.schritte);
-  const nachPunkten = [...zeilen].sort((a, b) => b.punkte - a.punkte || b.schritte - a.schritte);
-  nachSchritten.forEach((z, i) => (z.rangSchritte = i + 1));
-  nachPunkten.forEach((z, i) => (z.rangPunkte = i + 1));
-  return { zeilen, nachSchritten, nachPunkten, anzahlTage: relevant.length };
+  const zeilen = freunde
+    .map((f) => ({ ...f, ...summe[f.id], km: Math.round(summe[f.id].km * 10) / 10 }))
+    .sort((a, b) => b.schritte - a.schritte);
+  zeilen.forEach((z, i) => (z.rang = i + 1));
+  return { zeilen, anzahlTage: relevant.length };
 }
 
 /* ---------- Kleine Bausteine ---------- */
@@ -250,7 +240,6 @@ export default function SchritteChallenge() {
   const [quelle, setQuelle] = useState("laden");
   const [ichProfil, setIchProfil] = useState(null);
   const [zeitraum, setZeitraum] = useState("woche");
-  const [sortierung, setSortierung] = useState("punkte");
   const [nachtragen, setNachtragen] = useState(false);
   const [entwurf, setEntwurf] = useState("");
   const [offen, setOffen] = useState(null);
@@ -295,7 +284,7 @@ export default function SchritteChallenge() {
       tage
         .slice(-12)
         .map((d) => {
-          const { sieger } = tagesPunkte(eintraege[schluessel(d)] ?? {});
+          const sieger = tagessieger(eintraege[schluessel(d)] ?? {});
           return { datum: d, sieger: freunde.find((f) => f.id === sieger) };
         })
         .filter((c) => c.sieger),
@@ -335,18 +324,17 @@ export default function SchritteChallenge() {
     ];
   }, [tage, eintraege, freunde]);
 
-  const liste = sortierung === "punkte" ? tabelle.nachPunkten : tabelle.nachSchritten;
+  const liste = tabelle.zeilen;
   const maxHeute = tagesRennen[0]?.schritte || 0;
 
   const eintragen = async () => {
     const wert = parseInt(entwurf.replace(/\D/g, ""), 10);
     if (!wert || !ich) return;
-    const gekappt = Math.min(wert, TAGESCAP);
 
     // Erst lokal anzeigen, damit die Eingabe sofort quittiert wird
     setEintraege((alt) => ({
       ...alt,
-      [heuteKey]: { ...alt[heuteKey], [ich.id]: { schritte: gekappt, km: zuKm(gekappt), quelle: "manuell" } },
+      [heuteKey]: { ...alt[heuteKey], [ich.id]: { schritte: wert, km: zuKm(wert), quelle: "manuell" } },
     }));
     setEntwurf("");
     setNachtragen(false);
@@ -357,7 +345,7 @@ export default function SchritteChallenge() {
       await fetch("/api/nachtragen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datum: heuteKey, schritte: gekappt }),
+        body: JSON.stringify({ datum: heuteKey, schritte: wert }),
       });
     } catch {
       /* beim nächsten Laden wird ohnehin der Serverstand gezogen */
@@ -550,8 +538,7 @@ export default function SchritteChallenge() {
             </button>
           </div>
           <p className="hinweis">
-            Kilometer werden aus den Schritten berechnet. Werte über {zahl(TAGESCAP)} werden gekappt.
-            Nachtragen geht 48 Stunden rückwirkend.
+            Kilometer werden aus den Schritten berechnet. Nachtragen geht 48 Stunden rückwirkend.
           </p>
         </>
       ) : (
@@ -606,11 +593,9 @@ export default function SchritteChallenge() {
       <details>
         <summary>Spielregeln</summary>
         <p className="regeln">
+          Gewertet wird die Summe der Schritte.
+          <br />
           Der Tag endet um 23:59 Uhr deutscher Zeit.
-          <br />
-          Tagessieg bringt 3 Punkte, Platz 2 zwei, Platz 3 einen.
-          <br />
-          Maximal {zahl(TAGESCAP)} Schritte pro Tag zählen.
           <br />
           Nachtragen ist 48 Stunden rückwirkend möglich.
           <br />
@@ -759,14 +744,7 @@ export default function SchritteChallenge() {
           <span>
             {zeitraumLabel} · {tabelle.anzahlTage} {tabelle.anzahlTage === 1 ? "Tag" : "Tage"}
           </span>
-          <div className="sortWahl">
-            <button aria-pressed={sortierung === "punkte"} onClick={() => setSortierung("punkte")}>
-              Punkte
-            </button>
-            <button aria-pressed={sortierung === "schritte"} onClick={() => setSortierung("schritte")}>
-              Summe
-            </button>
-          </div>
+          <span>nach Schritten</span>
         </div>
 
         {liste.map((z, i) => (
@@ -784,25 +762,12 @@ export default function SchritteChallenge() {
                 </span>
                 <span className="rangMeta">
                   {z.siege > 0 ? `${z.siege} Tagessieg${z.siege === 1 ? "" : "e"}` : "kein Tagessieg"} ·{" "}
-                  {kmText(z.km)} km
+                  Ø {zahl(z.schritte / Math.max(1, z.verlauf.length))}/Tag
                 </span>
               </span>
               <span className="werte">
-                {sortierung === "punkte" ? (
-                  <>
-                    <span className="wertHaupt">{z.punkte} P</span>
-                    <span className="wertNeben">
-                      {zahl(z.schritte)} Schritte · Platz {z.rangSchritte}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="wertHaupt">{zahl(z.schritte)}</span>
-                    <span className="wertNeben">
-                      {z.punkte} Punkte · Platz {z.rangPunkte}
-                    </span>
-                  </>
-                )}
+                <span className="wertHaupt">{zahl(z.schritte)}</span>
+                <span className="wertNeben">{kmText(z.km)} km</span>
               </span>
             </button>
             {offen === z.id && (
