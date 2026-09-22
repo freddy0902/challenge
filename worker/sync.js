@@ -5,8 +5,10 @@
 
 const BASIS = "https://health.googleapis.com/v4/users/me/dataTypes";
 
-// Spielregeln – müssen zu denen im Frontend passen
-export const TAGESCAP = 30000;
+// Kein Tagesdeckel: gewertet wird die volle Summe. Die Obergrenze hier ist
+// keine Spielregel, sondern die Prüfbedingung der Tabelle (schritte <= 100000)
+// und fängt nur offensichtlichen Unsinn ab.
+const OBERGRENZE = 100000;
 const SCHRITTE_PRO_KM = 1380;
 
 /** Zivilzeit-Objekt, wie dailyRollUp es erwartet. */
@@ -78,7 +80,7 @@ function summe(wert) {
 
 /** Verwirft, was physikalisch nicht sein kann. */
 function plausibel(schritte, km) {
-  if (schritte < 0 || schritte > TAGESCAP * 3) return false;
+  if (schritte < 0 || schritte > OBERGRENZE) return false;
   if (km == null || km === 0 || schritte === 0) return true;
   const proKm = schritte / km;
   return proKm > 600 && proKm < 2500;
@@ -128,7 +130,7 @@ export async function personSynchronisieren(person, tage, env) {
       ).bind(
         person.id,
         datum,
-        Math.min(roh, TAGESCAP), // Cap greift hier, nicht im Frontend
+        roh,
         km ?? Math.round((roh / SCHRITTE_PRO_KM) * 10) / 10,
         jetzt,
       ),

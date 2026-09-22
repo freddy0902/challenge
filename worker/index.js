@@ -8,7 +8,10 @@
 // ============================================================
 
 import { jwtVerify, createRemoteJWKSet } from "jose";
-import { alleSynchronisieren, TAGESCAP } from "./sync.js";
+import { alleSynchronisieren } from "./sync.js";
+
+// Obergrenze der Tabelle (schritte <= 100000) – keine Spielregel.
+const OBERGRENZE = 100000;
 
 const SCOPE = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
 
@@ -113,7 +116,6 @@ async function daten(mail, env) {
         }
       : null,
     email: mail,
-    tagescap: TAGESCAP,
     teilnehmer: (roster.results ?? []).map((t) => ({
       id: t.id,
       name: t.name,
@@ -141,17 +143,19 @@ async function nachtragen(request, mail, env) {
   const alter = (Date.now() - Date.parse(`${datum}T00:00:00Z`)) / 86400000;
   if (alter > 2 || alter < -1) return json({ fehler: "Nur 48 Stunden rückwirkend." }, 400);
 
-  const gekappt = Math.min(Math.round(wert), TAGESCAP);
+  const gerundet = Math.round(wert);
+  if (gerundet > OBERGRENZE) return json({ fehler: "Wert unplausibel hoch." }, 400);
+
   await env.DB.prepare(
     `insert into eintraege (teilnehmer_id, datum, schritte, km, quelle, aktualisiert_am)
      values (?1, ?2, ?3, ?4, 'manuell', ?5)
      on conflict (teilnehmer_id, datum) do update set
        schritte = excluded.schritte, km = excluded.km,
        quelle = excluded.quelle, aktualisiert_am = excluded.aktualisiert_am`,
-  ).bind(ich.id, datum, gekappt, Math.round((gekappt / 1380) * 10) / 10, new Date().toISOString())
+  ).bind(ich.id, datum, gerundet, Math.round((gerundet / 1380) * 10) / 10, new Date().toISOString())
    .run();
 
-  return json({ ok: true, schritte: gekappt });
+  return json({ ok: true, schritte: gerundet });
 }
 
 /** Schritt 1 des OAuth-Flows. */
