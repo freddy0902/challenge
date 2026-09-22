@@ -81,14 +81,24 @@ async function daten(mail, env) {
   seit.setUTCDate(seit.getUTCDate() - 120);
   const grenze = seit.toISOString().slice(0, 10);
 
-  const { results } = await env.DB.prepare(
-    `select t.id as teilnehmer_id, t.name, t.kurz, t.farbe,
-            e.datum, e.schritte, e.km, e.quelle
-       from eintraege e
-       join teilnehmer t on t.id = e.teilnehmer_id
-      where e.datum >= ?1
-      order by e.datum asc`,
-  ).bind(grenze).all();
+  // Die Teilnehmerliste kommt getrennt von den Einträgen. Sonst wäre
+  // unsichtbar, wer zwar eingeladen ist, aber noch keinen Tag gemeldet hat –
+  // und der Leerzustand im Frontend hätte niemanden zu zeigen.
+  const [roster, verlauf] = await env.DB.batch([
+    env.DB.prepare(
+      `select id, name, kurz, farbe, verbunden_am, letzter_sync
+         from teilnehmer
+        order by name collate nocase`,
+    ),
+    env.DB.prepare(
+      `select t.id as teilnehmer_id, t.name, t.kurz, t.farbe,
+              e.datum, e.schritte, e.km, e.quelle
+         from eintraege e
+         join teilnehmer t on t.id = e.teilnehmer_id
+        where e.datum >= ?1
+        order by e.datum asc`,
+    ).bind(grenze),
+  ]);
 
   return {
     ich: ich
@@ -104,7 +114,15 @@ async function daten(mail, env) {
       : null,
     email: mail,
     tagescap: TAGESCAP,
-    zeilen: results ?? [],
+    teilnehmer: (roster.results ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      kurz: t.kurz,
+      farbe: t.farbe,
+      verbunden: t.verbunden_am != null,
+      letzterSync: t.letzter_sync,
+    })),
+    zeilen: verlauf.results ?? [],
   };
 }
 
