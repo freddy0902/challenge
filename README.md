@@ -1,21 +1,21 @@
 # Schritte-Challenge
 
-Schritte-Wettbewerb fuer eine Freundesrunde. Tages-, Wochen- und Monatswertung nach der Summe der Schritte.
+Schritte-Wettbewerb für eine Freundesrunde. Tages-, Wochen- und Monatswertung nach der Summe der Schritte.
 
-Die Daten kommen automatisch aus der Google Health API. Der Zugang laeuft ueber eine Einladungsliste, es gibt keine oeffentliche Seite.
+Die Daten kommen automatisch aus der Google Health API. Der Zugang läuft über eine Einladungsliste, es gibt keine öffentliche Seite.
 
 ## Aufbau
 
-Ein einziger Cloudflare Worker macht alles. Frontend und API liegen deshalb auf demselben Hostnamen, was eine einzige Access-Anwendung ausreichen laesst.
+Ein einziger Cloudflare Worker macht alles. Frontend und API liegen deshalb auf demselben Hostnamen, was eine einzige Access-Anwendung ausreichen lässt.
 
 | Teil | Aufgabe |
 |---|---|
 | Cloudflare Access | Einladungsliste, Login per Einmal-PIN |
 | Worker, statische Assets | liefert das gebaute Frontend aus |
-| Worker /api/daten | Rangliste, prueft das Access-Token |
-| Worker /api/nachtragen | Notnagel, 48 Stunden rueckwirkend |
+| Worker /api/daten | Rangliste, prüft das Access-Token |
+| Worker /api/nachtragen | Notnagel, 48 Stunden rückwirkend |
 | Worker /auth/* | Google-OAuth-Flow |
-| Worker Cron | 23:50 und 06:10, mehrere Tage rueckwirkend |
+| Worker Cron | 23:50 und 06:10, mehrere Tage rückwirkend |
 | D1 | teilnehmer, eintraege |
 | Cloudflare Workers Builds | baut und deployt bei jedem Push auf main |
 
@@ -33,6 +33,6 @@ Der Tag endet um 23:59 Uhr deutscher Zeit.
 
 Die Woche beginnt am Montag.
 
-Nachtragen ist 48 Stunden rueckwirkend moeglich.
+Nachtragen ist 48 Stunden rückwirkend möglich.
 
-Plausibilitaetspruefung und Nachtragefrist laufen im Worker, nicht im Frontend.
+Plausibilitätsprüfung und Nachtragefrist laufen im Worker, nicht im Frontend.
