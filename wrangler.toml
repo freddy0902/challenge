@@ -1,0 +1,35 @@
+name = "schritte-challenge"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+
+# Das gebaute Frontend wird vom selben Worker ausgeliefert.
+# Dadurch liegen Seite und API auf demselben Hostnamen – nötig,
+# damit eine einzige Access-Anwendung beides schützt.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Nur diese Pfade laufen durch den Worker-Code, alles andere
+# kommt direkt aus dem Asset-Speicher.
+run_worker_first = ["/api/*", "/auth/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "schritte-challenge"
+database_id = "ecd46e40-b649-4f2a-9702-b0e6bffc5c4c"
+
+# Nächtlicher Sync. Zeiten in UTC:
+# 21:50 UTC = 23:50 MESZ (laufender Tag)
+# 04:10 UTC = 06:10 MESZ (finaler Vortageswert)
+[triggers]
+crons = ["50 21 * * *", "10 4 * * *"]
+
+[vars]
+ACCESS_TEAM = "freddy0902"
+ACCESS_AUD  = "aca663d381a4c36bc74aa412b110c06b1776e38cd32186c8b68be01bbe77df5f"
+
+# Geheim, per `wrangler secret put` setzen:
+#   GOOGLE_CLIENT_ID
+#   GOOGLE_CLIENT_SECRET
+#   GOOGLE_REDIRECT_URI
+#   STATE_SECRET
